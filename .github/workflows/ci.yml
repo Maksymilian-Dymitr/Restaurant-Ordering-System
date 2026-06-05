@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [Master]
+  pull_request:
+    branches: [Master]
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        working-directory: backend
+        run: bun install --frozen-lockfile
+
+      - name: Type check
+        working-directory: backend
+        run: bun tsc --noEmit
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: bun install --frozen-lockfile
+
+      - name: Type check
+        working-directory: frontend
+        run: bun tsc --noEmit
+
+      - name: Build
+        working-directory: frontend
+        run: bun run build
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build images
+        run: docker compose build
