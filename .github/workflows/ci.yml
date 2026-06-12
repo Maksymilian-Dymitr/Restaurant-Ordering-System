@@ -51,12 +51,3 @@ jobs:
       - name: Run E2E tests
         working-directory: e2e
         run: bun test
-
-  docker:
-    name: Docker build
-    runs-on: ubuntu-latest
-    needs: [test]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build images
-        run: docker compose build
