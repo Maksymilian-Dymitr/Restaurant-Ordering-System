@@ -2,8 +2,6 @@ services:
   product-service:
     build: ./backend/product-service
     restart: on-failure
-    ports:
-      - "3001:3001"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/app
       - REDIS_URL=redis://redis:6379
@@ -16,8 +14,6 @@ services:
   order-service:
     build: ./backend/order-service
     restart: on-failure
-    ports:
-      - "3002:3002"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/app
       - REDIS_URL=redis://redis:6379
@@ -42,8 +38,6 @@ services:
   notification-service:
     build: ./backend/notification-service
     restart: on-failure
-    ports:
-      - "3003:3003"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/app
       - REDIS_URL=redis://redis:6379
@@ -59,8 +53,6 @@ services:
   error-service:
     build: ./backend/error-service
     restart: on-failure
-    ports:
-      - "3004:3004"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/app
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
@@ -81,13 +73,12 @@ services:
     depends_on:
       - product-service
       - order-service
+      - kitchen-service
       - notification-service
       - error-service
 
   postgres:
     image: postgres:17-alpine
-    ports:
-      - "5432:5432"
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
@@ -103,8 +94,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -115,9 +104,6 @@ services:
 
   rabbitmq:
     image: rabbitmq:4-management-alpine
-    ports:
-      - "5672:5672"
-      - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:

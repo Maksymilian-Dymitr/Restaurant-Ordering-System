@@ -1,12 +1,17 @@
-import { publish as defaultPublish } from "./rabbitmq";
+import { orders, type KitchenOrder } from "./store";
 
-export async function handleOrderCreated(
-  message: { orderId: number; customerId: string },
-  delay = 3000,
-  publish = defaultPublish,
-) {
-  console.log("new order:", message.orderId);
-  await new Promise((r) => setTimeout(r, delay)); // kitchen sim
-  await publish("order.ready", { orderId: message.orderId, customerId: message.customerId });
-  console.log("Meal done");
+export function handleOrderCreated(message: {
+  orderId: number;
+  customerId: string;
+  products?: Array<{ productId: number; quantity: number }>;
+}) {
+  const order: KitchenOrder = {
+    orderId: message.orderId,
+    customerId: message.customerId,
+    products: message.products ?? [],
+    status: "pending",
+    receivedAt: new Date().toISOString(),
+  };
+  orders.set(message.orderId, order);
+  console.log(`New order received: #${message.orderId}`);
 }

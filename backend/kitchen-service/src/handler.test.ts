@@ -1,33 +1,53 @@
-import { describe, it, expect, mock, beforeEach } from "bun:test";
+import { describe, it, expect, beforeEach } from "bun:test";
 import { handleOrderCreated } from "./handler";
+import { orders } from "./store";
 
-const mockPublish = mock(async () => {});
+beforeEach(() => {
+  orders.clear();
+});
 
 describe("handleOrderCreated", () => {
-  beforeEach(() => {
-    mockPublish.mockClear();
+  it("adds the order to the kitchen queue with status 'pending'", () => {
+    handleOrderCreated({ orderId: 42, customerId: "customer-1", products: [{ productId: 1, quantity: 2 }] });
+
+    const stored = orders.get(42);
+    expect(stored).toBeDefined();
+    expect(stored!.orderId).toBe(42);
+    expect(stored!.customerId).toBe("customer-1");
+    expect(stored!.status).toBe("pending");
   });
 
-  it("publishes order.ready with orderId and customerId", async () => {
-    await handleOrderCreated({ orderId: 42, customerId: "customer-1" }, 0, mockPublish);
+  it("stores the products array from the message", () => {
+    const products = [
+      { productId: 1, quantity: 2 },
+      { productId: 3, quantity: 1 },
+    ];
+    handleOrderCreated({ orderId: 7, customerId: "c1", products });
 
-    expect(mockPublish).toHaveBeenCalledWith("order.ready", {
-      orderId: 42,
-      customerId: "customer-1",
-    });
+    expect(orders.get(7)!.products).toEqual(products);
   });
 
-  it("publishes exactly once per order", async () => {
-    await handleOrderCreated({ orderId: 7, customerId: "customer-2" }, 0, mockPublish);
+  it("defaults products to an empty array when omitted from message", () => {
+    handleOrderCreated({ orderId: 1, customerId: "c1" });
 
-    expect(mockPublish).toHaveBeenCalledTimes(1);
+    expect(orders.get(1)!.products).toEqual([]);
   });
 
-  it("propagates publish errors to the caller", async () => {
-    mockPublish.mockImplementation(() => Promise.reject(new Error("channel closed")));
+  it("sets receivedAt to a valid ISO timestamp", () => {
+    const before = new Date().toISOString();
+    handleOrderCreated({ orderId: 5, customerId: "c2" });
+    const after = new Date().toISOString();
 
-    await expect(
-      handleOrderCreated({ orderId: 1, customerId: "c1" }, 0, mockPublish),
-    ).rejects.toThrow("channel closed");
+    const { receivedAt } = orders.get(5)!;
+    expect(receivedAt >= before).toBe(true);
+    expect(receivedAt <= after).toBe(true);
+  });
+
+  it("overwrites a previously received order with the same orderId", () => {
+    handleOrderCreated({ orderId: 10, customerId: "first" });
+    handleOrderCreated({ orderId: 10, customerId: "second" });
+
+    expect(orders.size).toBe(1);
+    expect(orders.get(10)!.customerId).toBe("second");
   });
 });

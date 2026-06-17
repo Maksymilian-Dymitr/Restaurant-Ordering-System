@@ -6,6 +6,15 @@ import { connectRabbitMQ, consume } from "./rabbitmq";
 await verifyConnection();
 await connectRabbitMQ();
 
+await consume("order.created", "order.created.error-service", async (message: any) => {
+  await saveError({
+    service: "order-service",
+    message: `Order created: orderId=${message.orderId}, customerId=${message.customerId}`,
+    severity: "info",
+  });
+  console.log(`Logged order.created event: orderId=${message.orderId}`);
+});
+
 await consume("service.error", "service.error.error-service", async (message: any) => {
   await saveError({
     service: message.service,
