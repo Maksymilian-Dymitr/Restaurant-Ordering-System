@@ -12,6 +12,8 @@ const UpdateStatusBody = t.Object({
   status: t.Union([t.Literal("pending"), t.Literal("ongoing"), t.Literal("done")]),
 });
 
+const KITCHEN_API_KEY = process.env.KITCHEN_API_KEY ?? "";
+
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 await connectRabbitMQ();
@@ -24,7 +26,39 @@ await consume("order.created", "order.created.kitchen-service", async (message: 
 
 new Elysia()
   .use(swagger({ documentation: { info: { title: "Kitchen Service", version: "1.0.0" } } }))
+  .onBeforeHandle(({ headers, set }) => {
+    if (headers["x-kitchen-key"] !== KITCHEN_API_KEY) {
+      set.status = 403;
+      return { error: "Forbidden" };
+    }
+  })
   .get("/kitchen/orders", () => Array.from(orders.values()))
+  .get("/kitchen/orders/stream", () => {
+    const encoder = new TextEncoder();
+    let timer: ReturnType<typeof setInterval>;
+
+    const stream = new ReadableStream({
+      start(controller) {
+        const push = () => {
+          const payload = encoder.encode(`data: ${JSON.stringify(Array.from(orders.values()))}\n\n`);
+          controller.enqueue(payload);
+        };
+        push();
+        timer = setInterval(push, 5000);
+      },
+      cancel() {
+        clearInterval(timer);
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
+    });
+  })
   .patch(
     "/kitchen/orders/:id",
     ({ params, body, set }) => {

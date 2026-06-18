@@ -3,6 +3,8 @@ import { describe, it, expect } from "bun:test";
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 const BASE = "https://localhost";
+const KITCHEN_KEY = process.env.KITCHEN_API_KEY ?? "dev-kitchen-key-change-in-production";
+const kitchenHeaders = { "X-Kitchen-Key": KITCHEN_KEY };
 
 // ── Menu ─────────────────────────────────────────────────────────────────────
 
@@ -77,6 +79,27 @@ describe("POST /orders — schema validation", () => {
   });
 });
 
+// ── Kitchen API key ───────────────────────────────────────────────────────────
+
+describe("Kitchen API — authentication", () => {
+  it("returns 403 with no key", async () => {
+    const res = await fetch(`${BASE}/kitchen/orders`);
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 403 with a wrong key", async () => {
+    const res = await fetch(`${BASE}/kitchen/orders`, {
+      headers: { "X-Kitchen-Key": "wrong-key" },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 200 with the correct key", async () => {
+    const res = await fetch(`${BASE}/kitchen/orders`, { headers: kitchenHeaders });
+    expect(res.status).toBe(200);
+  });
+});
+
 // ── Full order flow ───────────────────────────────────────────────────────────
 
 // Unique customer per test run to avoid cross-run data collisions
@@ -111,7 +134,7 @@ describe("Full order flow", () => {
 
   it("kitchen-service receives the order via RabbitMQ and it appears in GET /kitchen/orders", async () => {
     await new Promise((r) => setTimeout(r, 1000));
-    const res = await fetch(`${BASE}/kitchen/orders`);
+    const res = await fetch(`${BASE}/kitchen/orders`, { headers: kitchenHeaders });
     expect(res.status).toBe(200);
     const kitchenOrders = await res.json();
     expect(Array.isArray(kitchenOrders)).toBe(true);
@@ -124,7 +147,7 @@ describe("Full order flow", () => {
   it("PATCH /kitchen/orders/:id changes the order status to 'ongoing'", async () => {
     const res = await fetch(`${BASE}/kitchen/orders/${createdOrderId}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { ...kitchenHeaders, "Content-Type": "application/json" },
       body: JSON.stringify({ status: "ongoing" }),
     });
     expect(res.status).toBe(200);
@@ -136,13 +159,13 @@ describe("Full order flow", () => {
   it("POST /kitchen/orders/:id/done triggers order.ready and order status becomes 'ready'", async () => {
     const kitchenRes = await fetch(`${BASE}/kitchen/orders/${createdOrderId}/done`, {
       method: "POST",
+      headers: kitchenHeaders,
     });
     expect(kitchenRes.status).toBe(200);
     const result = await kitchenRes.json();
     expect(result.orderId).toBe(createdOrderId);
     expect(result.notified).toBe(true);
 
-    // Give RabbitMQ time to deliver order.ready to order-service
     await new Promise((r) => setTimeout(r, 1000));
 
     const orderRes = await fetch(`${BASE}/orders/${createdOrderId}`);
@@ -166,7 +189,7 @@ describe("Full order flow", () => {
 
 describe("Kitchen API", () => {
   it("GET /kitchen/orders returns an array", async () => {
-    const res = await fetch(`${BASE}/kitchen/orders`);
+    const res = await fetch(`${BASE}/kitchen/orders`, { headers: kitchenHeaders });
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
@@ -175,7 +198,7 @@ describe("Kitchen API", () => {
   it("PATCH /kitchen/orders/:id returns 404 for a non-existent order", async () => {
     const res = await fetch(`${BASE}/kitchen/orders/999999`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { ...kitchenHeaders, "Content-Type": "application/json" },
       body: JSON.stringify({ status: "ongoing" }),
     });
     expect(res.status).toBe(404);
@@ -184,6 +207,7 @@ describe("Kitchen API", () => {
   it("POST /kitchen/orders/:id/done returns 404 for a non-existent order", async () => {
     const res = await fetch(`${BASE}/kitchen/orders/999999/done`, {
       method: "POST",
+      headers: kitchenHeaders,
     });
     expect(res.status).toBe(404);
   });
