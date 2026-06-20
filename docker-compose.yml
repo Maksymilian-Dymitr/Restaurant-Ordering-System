@@ -31,7 +31,7 @@ services:
     restart: on-failure
     environment:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
-      - KITCHEN_API_KEY=${KITCHEN_API_KEY}
+      - KITCHEN_API_KEY=${KITCHEN_API_KEY:-dev-kitchen-key-change-in-production}
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -67,7 +67,7 @@ services:
     build:
       context: ./nginx
       args:
-        SWAGGER_PASSWORD: ${SWAGGER_PASSWORD}
+        SWAGGER_PASSWORD: ${SWAGGER_PASSWORD:-change-me}
     restart: on-failure
     ports:
       - "80:80"
