@@ -21,7 +21,7 @@ mock.module("redis", () => ({
   }),
 }));
 
-const { getNotification, postNotification } = await import("./repository");
+const { getNotification, postNotification, deleteNotification } = await import("./repository");
 
 function resetMocks() {
   mockQuery.mockClear();
@@ -61,6 +61,26 @@ describe("getNotification", () => {
     const result = await getNotification(1);
 
     expect(result).toBeNull();
+  });
+});
+
+describe("deleteNotification", () => {
+  beforeEach(resetMocks);
+
+  it("deletes DB rows and clears the Redis cache key", async () => {
+    const result = await deleteNotification("customer-1");
+
+    expect(result).toBe(true);
+    expect(mockRedisDel).toHaveBeenCalledWith("notification:customer-1");
+    expect(mockQuery).toHaveBeenCalled();
+  });
+
+  it("returns false on DB error", async () => {
+    mockQuery.mockImplementation(() => Promise.reject(new Error("DB error")));
+
+    const result = await deleteNotification("customer-1");
+
+    expect(result).toBe(false);
   });
 });
 

@@ -6,8 +6,6 @@ const BASE = "https://localhost";
 const KITCHEN_KEY = process.env.KITCHEN_API_KEY ?? "dev-kitchen-key-change-in-production";
 const kitchenHeaders = { "X-Kitchen-Key": KITCHEN_KEY };
 
-// ── Menu ─────────────────────────────────────────────────────────────────────
-
 describe("GET /menu", () => {
   it("returns HTTP 200", async () => {
     const res = await fetch(`${BASE}/menu`);
@@ -32,8 +30,6 @@ describe("GET /menu", () => {
     }
   });
 });
-
-// ── Order schema validation ───────────────────────────────────────────────────
 
 describe("POST /orders — schema validation", () => {
   const post = (body: unknown) =>
@@ -79,8 +75,6 @@ describe("POST /orders — schema validation", () => {
   });
 });
 
-// ── Kitchen API key ───────────────────────────────────────────────────────────
-
 describe("Kitchen API — authentication", () => {
   it("returns 403 with no key", async () => {
     const res = await fetch(`${BASE}/kitchen/orders`);
@@ -100,9 +94,6 @@ describe("Kitchen API — authentication", () => {
   });
 });
 
-// ── Full order flow ───────────────────────────────────────────────────────────
-
-// Unique customer per test run to avoid cross-run data collisions
 const TEST_CUSTOMER = `e2e-${Date.now()}`;
 let createdOrderId: number;
 
@@ -185,7 +176,35 @@ describe("Full order flow", () => {
   });
 });
 
-// ── Kitchen API ───────────────────────────────────────────────────────────────
+describe("GET /orders", () => {
+  it("returns HTTP 200 and an array", async () => {
+    const res = await fetch(`${BASE}/orders`);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
+  it("includes the order created during the full flow", async () => {
+    const res = await fetch(`${BASE}/orders`);
+    const data = await res.json();
+    const order = data.find((o: any) => o.id === createdOrderId);
+    expect(order).toBeDefined();
+    expect(order.customer_id).toBe(TEST_CUSTOMER);
+  });
+});
+
+describe("DELETE /notification/:customerId", () => {
+  it("returns 204 and removes the notifications", async () => {
+    const del = await fetch(`${BASE}/notification/${TEST_CUSTOMER}`, { method: "DELETE" });
+    expect(del.status).toBe(204);
+
+    const get = await fetch(`${BASE}/notification/${TEST_CUSTOMER}`);
+    expect(get.status).toBe(200);
+    const remaining = await get.json();
+    expect(Array.isArray(remaining)).toBe(true);
+    expect(remaining.length).toBe(0);
+  });
+});
 
 describe("Kitchen API", () => {
   it("GET /kitchen/orders returns an array", async () => {
@@ -211,9 +230,16 @@ describe("Kitchen API", () => {
     });
     expect(res.status).toBe(404);
   });
-});
 
-// ── Error service ─────────────────────────────────────────────────────────────
+  it("PATCH /kitchen/orders/:id returns 422 for an invalid status value", async () => {
+    const res = await fetch(`${BASE}/kitchen/orders/1`, {
+      method: "PATCH",
+      headers: { ...kitchenHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "invalid-status" }),
+    });
+    expect(res.status).toBe(422);
+  });
+});
 
 describe("GET /errors", () => {
   it("returns HTTP 200 and an array", async () => {

@@ -5,6 +5,7 @@ An event-driven microservice backend for a fast-food restaurant, built with Bun,
 ## Start
 
 ```bash
+cp .exemple.env .env   # then edit .env to set your secrets
 docker compose up --build
 ```
 
@@ -52,9 +53,15 @@ nginx :80/:443  (reverse proxy + SSL termination)
 All fields are validated — missing or wrong types return **422**.
 
 ### Kitchen
+
+All kitchen endpoints require the `x-kitchen-key` header. Requests without a valid key return **403 Forbidden**.
+
+Set `KITCHEN_API_KEY` in your `.env` file before starting.
+
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/kitchen/orders` | List all orders received by the kitchen |
+| `GET` | `/kitchen/orders/stream` | SSE stream — pushes the full order queue every 5 seconds |
 | `PATCH` | `/kitchen/orders/:id` | Update order status (`pending` / `ongoing` / `done`) |
 | `POST` | `/kitchen/orders/:id/done` | Mark order as done and notify the rest of the system |
 
@@ -67,6 +74,7 @@ All fields are validated — missing or wrong types return **422**.
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/notification/:customerId` | Get all notifications for a customer |
+| `DELETE` | `/notification/:customerId` | Delete all notifications for a customer |
 
 ### Errors
 | Method | Path | Description |
@@ -82,12 +90,23 @@ All fields are validated — missing or wrong types return **422**.
 4. `order.ready` is published to RabbitMQ — order-service sets status to `ready`, notification-service creates a customer notification.
 5. error-service logs every `order.created` event for auditing.
 
+## Swagger
+
+Each service exposes a Swagger UI at `/<service>/swagger`, protected by basic auth (username `admin`, password set via `SWAGGER_PASSWORD` in `.env`).
+
+| Service | URL |
+|---|---|
+| Menu | `https://localhost/menu/swagger` |
+| Orders | `https://localhost/orders/swagger` |
+| Kitchen | `https://localhost/kitchen/swagger` |
+| Notifications | `https://localhost/notification/swagger` |
+| Errors | `https://localhost/errors/swagger` |
+
 ## Running tests
 
 Unit tests (no Docker needed):
 
 ```bash
-# Run all services
 for dir in backend/*/; do (cd "$dir" && bun test); done
 ```
 
@@ -108,17 +127,23 @@ curl -k -X POST https://localhost/orders \
   -H "Content-Type: application/json" \
   -d '{"customerId": "alice", "products": [{"productId": 1, "quantity": 1}]}'
 
-# Kitchen: see incoming orders
-curl -k https://localhost/kitchen/orders
+# Kitchen: see incoming orders (API key required)
+curl -k -H "x-kitchen-key: dev-kitchen-key-change-in-production" https://localhost/kitchen/orders
+
+# Kitchen: stream live order queue via SSE
+curl -k --no-buffer -H "x-kitchen-key: dev-kitchen-key-change-in-production" https://localhost/kitchen/orders/stream
 
 # Kitchen: mark order as done (replace 1 with the actual orderId)
-curl -k -X POST https://localhost/kitchen/orders/1/done
+curl -k -H "x-kitchen-key: dev-kitchen-key-change-in-production" -X POST https://localhost/kitchen/orders/1/done
 
 # Check order status
 curl -k https://localhost/orders/1
 
 # Check customer notification
 curl -k https://localhost/notification/alice
+
+# Delete customer notifications
+curl -k -X DELETE https://localhost/notification/alice
 ```
 
 > `-k` skips SSL verification for the self-signed certificate used in development.

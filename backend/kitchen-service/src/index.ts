@@ -4,8 +4,6 @@ import { connectRabbitMQ, consume, publish } from "./rabbitmq";
 import { handleOrderCreated } from "./handler";
 import { orders } from "./store";
 
-// ── Schemas ───────────────────────────────────────────────────────────────────
-
 const OrderId = t.Object({ id: t.Numeric() });
 
 const UpdateStatusBody = t.Object({
@@ -14,15 +12,11 @@ const UpdateStatusBody = t.Object({
 
 const KITCHEN_API_KEY = process.env.KITCHEN_API_KEY ?? "";
 
-// ── Setup ─────────────────────────────────────────────────────────────────────
-
 await connectRabbitMQ();
 
 await consume("order.created", "order.created.kitchen-service", async (message: any) => {
   handleOrderCreated(message);
 });
-
-// ── Routes ────────────────────────────────────────────────────────────────────
 
 new Elysia()
   .use(swagger({ documentation: { info: { title: "Kitchen Service", version: "1.0.0" } } }))
@@ -81,6 +75,7 @@ new Elysia()
         return { error: "Order not found" };
       }
       order.status = "done";
+      orders.delete(params.id);
       await publish("order.ready", { orderId: order.orderId, customerId: order.customerId });
       return { orderId: order.orderId, notified: true };
     },

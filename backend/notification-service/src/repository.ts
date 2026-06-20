@@ -33,6 +33,18 @@ export async function getNotification(customer_id: string): Promise<any> {
   }
 }
 
+export async function deleteNotification(customer_id: string): Promise<boolean> {
+  const query = `DELETE FROM notifications WHERE customer_id = $1`;
+  try {
+    await redis.del(`notification:${customer_id}`);
+    await pool.query(query, [customer_id]);
+    return true;
+  } catch (error) {
+    console.error("❌", error);
+    return false;
+  }
+}
+
 export async function postNotification(customer_id: string): Promise<number | null> {
   const query = `INSERT INTO notifications (customer_id, message) VALUES ($1, 'Your order is ready!') RETURNING id`;
   try {

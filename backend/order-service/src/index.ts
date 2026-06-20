@@ -4,8 +4,6 @@ import { verifyConnection } from "./repository";
 import * as repo from "./repository";
 import { connectRabbitMQ, consume, publish } from "./rabbitmq";
 
-// ── Schemas ───────────────────────────────────────────────────────────────────
-
 const OrderId = t.Object({ id: t.Numeric() });
 
 const NewOrderBody = t.Object({
@@ -19,16 +17,12 @@ const NewOrderBody = t.Object({
   ),
 });
 
-// ── Setup ─────────────────────────────────────────────────────────────────────
-
 await verifyConnection();
 await connectRabbitMQ();
 
 await consume("order.ready", "order.ready.order-service", async (message: any) => {
   await repo.updateOrderStatus(message.orderId);
 });
-
-// ── Routes ────────────────────────────────────────────────────────────────────
 
 new Elysia()
   .use(swagger({ documentation: { info: { title: "Order Service", version: "1.0.0" } } }))
